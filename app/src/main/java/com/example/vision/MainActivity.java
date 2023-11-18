@@ -1,23 +1,33 @@
 package com.example.vision;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
-import android.content.pm.PackageManager;
+import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Camera;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.hardware.display.DisplayManager;
+import android.hardware.display.VirtualDisplay;
+import android.media.MediaCodecInfo;
+import android.media.MediaFormat;
+import android.media.MediaMuxer;
+import android.media.MediaRecorder;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
-
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+import android.widget.Toast;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraActivity;
@@ -25,17 +35,19 @@ import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.Size;
-import org.opencv.videoio.VideoWriter;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Method;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
-
-import android.Manifest;
-
-
-
 
 public class MainActivity extends CameraActivity {
 
@@ -59,6 +71,13 @@ public class MainActivity extends CameraActivity {
     public native void BorderGris(long addrInput, long addrOutput);
     public native void CalculateHistogram(long addrInput, long addrOutput);
 
+    //DetectFaces
+    public native void InitFaceDetector(String filePath);
+    public native void DetectFaces(long addrGray, long addrRGBA);
+    private File cascadeFile;
+    private boolean detectBoolean = false;
+
+
     //Pixels
     private int pixelColor;
     private Mat frame;
@@ -67,20 +86,27 @@ public class MainActivity extends CameraActivity {
     private SurfaceView histogramSurfaceView;
     private SurfaceHolder histogramSurfaceHolder;
     private Button showHistogramButton;
-    private boolean histogramVisible = false;
+    private boolean histogramVisible = true;
 
     //Color
     private Button colorPickerButton;
     private int selectedColor = Color.GRAY; // Color predeterminado
 
     //Grabar
-    private VideoWriter videoWriter;
+    private MediaProjectionManager mediaProjectionManager;
+    private MediaProjection mediaProjection;
     private boolean isRecording = false;
     private Button startRecordingButton;
     private Button stopRecordingButton;
-    private String videoFilePath; // Ruta del archivo de video
+    private static final int REQUEST_CODE = 123;
+    private VirtualDisplay virtualDisplay;
+    private MediaRecorder mediaRecorder;
+    private int displayWidth;
+    private int displayHeight;
+    private int screenDensity;
 
-    private static final int REQUEST_STORAGE_PERMISSION = 1;
+    private boolean changeCamera = true;
+
 
     private BaseLoaderCallback mLoaderCallBack = new BaseLoaderCallback(this) {
         @Override
@@ -104,12 +130,6 @@ public class MainActivity extends CameraActivity {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
-
-        // Verifica si el permiso de escritura en el almacenamiento externo no está otorgado
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            // Solicita el permiso al usuario
-            ActivityCompat.requestPermissions(this, new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, REQUEST_STORAGE_PERMISSION);
-        }
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.opencv_surface_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
@@ -164,69 +184,169 @@ public class MainActivity extends CameraActivity {
             }
         });
 
+        //DetectFaces
+
+        try{
+            cascadeFile = new File(getCacheDir(), "haarcascade_frontalface_default.xml");
+            if (!cascadeFile.exists()){
+                InputStream inputStream = getAssets().open("haarcascade_frontalface_default.xml");
+                FileOutputStream outputStream = new FileOutputStream(cascadeFile);
+                byte[] buffer = new byte[2048];
+                int bytesRead = -1;
+                while((bytesRead = inputStream.read(buffer)) != -1){
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+                inputStream.close();
+                outputStream.close();
+            }
+            InitFaceDetector(cascadeFile.getAbsolutePath());
+        }catch (IOException e){
+            e.printStackTrace();
+        }
+
         //Grabar
+
+        // Configura el MediaProjectionManager
+        mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+
+        // Configura botones
+        DisplayMetrics metrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(metrics);
+        displayWidth = metrics.widthPixels;
+        displayHeight = metrics.heightPixels;
+        screenDensity = metrics.densityDpi;
+
 
         startRecordingButton = findViewById(R.id.grabar);
         stopRecordingButton = findViewById(R.id.detener);
-        //videoFilePath = Environment.getExternalStorageDirectory() + "/videocapture.mp4"; // Ruta de destino del archivo de video
-        videoFilePath = "C:/Users/elvis/AndroidStudioProjects/vision/app/src/main/res/drawable/videocapture.mp4"; // Ruta de destino del archivo de video
 
         startRecordingButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Log.d("PixelInfo", "Entra");
-
-                startRecording();
+                /*startRecording();
+                startRecordingButton.setEnabled(false);
+                stopRecordingButton.setEnabled(true);*/
+                detectBoolean = !detectBoolean;
+                /*if(detectBoolean){
+                    histogramSurfaceView.setVisibility(SurfaceView.VISIBLE);
+                }else{
+                    histogramSurfaceView.setVisibility(SurfaceView.GONE);
+                }*/
             }
         });
+
+        //mOpenCvCameraView.setCameraIndex(1);
 
         stopRecordingButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                stopRecording();
+                /*stopRecording();
+                startRecordingButton.setEnabled(true);
+                stopRecordingButton.setEnabled(false);*/
+
             }
         });
 
+        // Inicialmente, deshabilita el botón de detener grabación
+        //stopRecordingButton.setEnabled(false);
+
+        // Inicializar MediaProjectionManager
+        mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+
     }
+
+    protected void setDisplayOrientation(Camera camera, int angle){
+        Method downPolymorphic;
+        try
+        {
+            downPolymorphic = camera.getClass().getMethod("setDisplayOrientation", new Class[] { int.class });
+            if (downPolymorphic != null)
+                downPolymorphic.invoke(camera, new Object[] { angle });
+        }
+        catch (Exception e1)
+        {
+            e1.printStackTrace();
+        }
+    }
+    private void startScreenCapture() {
+        if (mediaProjection == null) {
+            Intent captureIntent = mediaProjectionManager.createScreenCaptureIntent();
+            startActivityForResult(captureIntent, REQUEST_CODE);
+        }
+    }
+
 
     //Grabar
+    public void startRecording() {
+        initRecorder(); // Prepara el MediaRecorder
+        virtualDisplay = createVirtualDisplay(); // Crea el VirtualDisplay
+        mediaRecorder.start(); // Inicia la grabación
+        //isRecording = true;
+        if (mediaProjection == null) {
+            Intent captureIntent = mediaProjectionManager.createScreenCaptureIntent();
+            startActivityForResult(captureIntent, REQUEST_CODE);
+        }
+    }
+
+    private void initRecorder() {
+        mediaRecorder = new MediaRecorder();
+        mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
+        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+        mediaRecorder.setOutputFile(getSavePath()); // Asegúrate de que getSavePath() devuelve una ruta válida
+        mediaRecorder.setVideoSize(displayWidth, displayHeight);
+        mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
+        mediaRecorder.setVideoEncodingBitRate(512 * 1000);
+        mediaRecorder.setVideoFrameRate(30);
+
+        try {
+            mediaRecorder.prepare();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private VirtualDisplay createVirtualDisplay() {
+        Log.i("PixelInfo", "display");
+
+        return mediaProjection.createVirtualDisplay("MainActivity",
+                displayWidth, displayHeight, screenDensity,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                mediaRecorder.getSurface(), null,null);
+    }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == REQUEST_STORAGE_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // El usuario otorgó el permiso de escritura en el almacenamiento externo.
-                // Puedes realizar las operaciones de escritura en el almacenamiento externo aquí.
-            } else {
-                // El usuario denegó el permiso. Puedes mostrar un mensaje de que la aplicación no puede funcionar sin el permiso.
-            }
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE && resultCode == RESULT_OK) {
+            mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data);
+            startRecording(); // Configura y prepara MediaRecorder y luego inicia la grabación
         }
     }
 
-    private void startRecording() {
-        Log.d("PixelInfo", "Entra2");
-        Log.d("PixelInfo", videoFilePath);
-
-        videoWriter = new VideoWriter(videoFilePath, VideoWriter.fourcc('M', 'J', 'P', 'G'), 30, new Size(mOpenCvCameraView.getWidth(), mOpenCvCameraView.getHeight()), true);
-        Log.d("PixelInfo", "Entra3");
-
-        if (videoWriter.isOpened()) {
-            isRecording = true;
-            startRecordingButton.setVisibility(View.GONE);
-            stopRecordingButton.setVisibility(View.VISIBLE);
+    private String getSavePath() {
+        String directoryPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/MyAppRecordings";
+        File directory = new File(directoryPath);
+        if (!directory.exists()) {
+            directory.mkdirs();
         }
+
+        String fileName = "recording_" + System.currentTimeMillis() + ".mp4";
+        return directoryPath + File.separator + fileName;
     }
 
-    private void stopRecording() {
-        if (videoWriter != null && videoWriter.isOpened()) {
-            isRecording = false;
-            videoWriter.release();
-            startRecordingButton.setVisibility(View.VISIBLE);
-            stopRecordingButton.setVisibility(View.GONE);
+    public void stopRecording() {
+        if (mediaProjection != null) {
+            mediaProjection.stop();
+            mediaProjection = null;
         }
+        if (mediaRecorder != null) {
+            mediaRecorder.stop();
+            mediaRecorder.reset();
+            mediaRecorder.release(); // No olvides liberar el MediaRecorder
+        }
+        //isRecording = false;
     }
+
 
     // Función para obtener el color en las coordenadas (x, y)
     private int getColorAtPixel(int x, int y) {
@@ -297,12 +417,19 @@ public class MainActivity extends CameraActivity {
         @Override
         public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame){
             Mat mRgba = inputFrame.rgba();
+            Mat gray = inputFrame.gray();
 
             // Obtiene la matriz (Mat) de la imagen actual
             frame = mRgba;
 
             //Grayscale(mRgba.getNativeObjAddr());
-            ChangeColor(mRgba.getNativeObjAddr(), pixelColor, selectedColor);
+            if(detectBoolean){
+                DetectFaces(gray.getNativeObjAddr(), mRgba.getNativeObjAddr());
+            }else{
+                ChangeColor(mRgba.getNativeObjAddr(), pixelColor, selectedColor);
+            }
+
+            //
 
             Mat edges = new Mat(frame.size(), CvType.CV_8UC1);
             BorderGris(frame.getNativeObjAddr(), edges.getNativeObjAddr());
@@ -362,7 +489,7 @@ public class MainActivity extends CameraActivity {
         if (mOpenCvCameraView != null) {
             mOpenCvCameraView.disableView();
         }
-        stopRecording(); // Detener la grabación y liberar recursos
+
     }
 
 }

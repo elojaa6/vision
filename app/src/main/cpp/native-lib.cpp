@@ -5,6 +5,11 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio/videoio_c.h>
 
+#include <opencv2/core.hpp>
+#include <opencv2/features2d.hpp>
+#include <vector>
+#include <opencv2/objdetect.hpp>
+
 using namespace cv;
 
 
@@ -144,6 +149,33 @@ Java_com_example_vision_MainActivity_CalculateHistogram(JNIEnv* env, jobject ins
     if (outputImage != nullptr) {
         *outputImage = rgbaImage;
     }
+}
+
+CascadeClassifier face_cascade;
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_vision_MainActivity_InitFaceDetector(JNIEnv* jniEvn, jobject MainActivity, jstring jFilePath) {
+    // TODO: implement InitFaceDetector()
+    const char * jnamestr = jniEvn->GetStringUTFChars(jFilePath, NULL);
+    std::string filePath(jnamestr);
+    face_cascade.load(filePath);
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_vision_MainActivity_DetectFaces(JNIEnv* jniEvn, jobject MainActivity, jlong addrGray, jlong addrRGBA){
+
+    Mat* mGray = (Mat*)addrGray;
+    Mat* mRGBA = (Mat*)addrRGBA;
+
+    std::vector<Rect> faces;
+
+    face_cascade.detectMultiScale(*mGray, faces);
+
+    for (int i = 0; i < faces.size(); ++i) {
+        rectangle(*mRGBA, Point(faces[i].x, faces[i].y), Point(faces[i].x+faces[i].width, faces[i].y+faces[i].height), Scalar(0, 255, 0), 2);
+    }
+    // TODO: implement FindFeatures()
 }
 
 
