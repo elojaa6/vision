@@ -65,9 +65,7 @@ public class MainActivity extends CameraActivity {
     private SurfaceHolder secondSurfaceHolder;
 
     //Funciones
-    public native void Grayscale(long addrRGBA);
     public native void ChangeColor(long addrInput, int pixelColor, int selectedColor);
-    public native void BorderColor(long addrInput, long addrOutput);
     public native void BorderGris(long addrInput, long addrOutput);
     public native void CalculateHistogram(long addrInput, long addrOutput);
 
@@ -92,20 +90,8 @@ public class MainActivity extends CameraActivity {
     private Button colorPickerButton;
     private int selectedColor = Color.GRAY; // Color predeterminado
 
-    //Grabar
-    private MediaProjectionManager mediaProjectionManager;
-    private MediaProjection mediaProjection;
-    private boolean isRecording = false;
-    private Button startRecordingButton;
-    private Button stopRecordingButton;
-    private static final int REQUEST_CODE = 123;
-    private VirtualDisplay virtualDisplay;
-    private MediaRecorder mediaRecorder;
-    private int displayWidth;
-    private int displayHeight;
-    private int screenDensity;
+    private Button changeFuntionButton;
 
-    private boolean changeCamera = true;
 
 
     private BaseLoaderCallback mLoaderCallBack = new BaseLoaderCallback(this) {
@@ -206,147 +192,17 @@ public class MainActivity extends CameraActivity {
 
         //Grabar
 
-        // Configura el MediaProjectionManager
-        mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+        changeFuntionButton = findViewById(R.id.grabar);
 
-        // Configura botones
-        DisplayMetrics metrics = new DisplayMetrics();
-        getWindowManager().getDefaultDisplay().getMetrics(metrics);
-        displayWidth = metrics.widthPixels;
-        displayHeight = metrics.heightPixels;
-        screenDensity = metrics.densityDpi;
-
-
-        startRecordingButton = findViewById(R.id.grabar);
-        stopRecordingButton = findViewById(R.id.detener);
-
-        startRecordingButton.setOnClickListener(new View.OnClickListener() {
+        changeFuntionButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                /*startRecording();
-                startRecordingButton.setEnabled(false);
-                stopRecordingButton.setEnabled(true);*/
                 detectBoolean = !detectBoolean;
-                /*if(detectBoolean){
-                    histogramSurfaceView.setVisibility(SurfaceView.VISIBLE);
-                }else{
-                    histogramSurfaceView.setVisibility(SurfaceView.GONE);
-                }*/
             }
         });
 
-        //mOpenCvCameraView.setCameraIndex(1);
-
-        stopRecordingButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                /*stopRecording();
-                startRecordingButton.setEnabled(true);
-                stopRecordingButton.setEnabled(false);*/
-
-            }
-        });
-
-        // Inicialmente, deshabilita el botón de detener grabación
-        //stopRecordingButton.setEnabled(false);
-
-        // Inicializar MediaProjectionManager
-        mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
 
     }
-
-    protected void setDisplayOrientation(Camera camera, int angle){
-        Method downPolymorphic;
-        try
-        {
-            downPolymorphic = camera.getClass().getMethod("setDisplayOrientation", new Class[] { int.class });
-            if (downPolymorphic != null)
-                downPolymorphic.invoke(camera, new Object[] { angle });
-        }
-        catch (Exception e1)
-        {
-            e1.printStackTrace();
-        }
-    }
-    private void startScreenCapture() {
-        if (mediaProjection == null) {
-            Intent captureIntent = mediaProjectionManager.createScreenCaptureIntent();
-            startActivityForResult(captureIntent, REQUEST_CODE);
-        }
-    }
-
-
-    //Grabar
-    public void startRecording() {
-        initRecorder(); // Prepara el MediaRecorder
-        virtualDisplay = createVirtualDisplay(); // Crea el VirtualDisplay
-        mediaRecorder.start(); // Inicia la grabación
-        //isRecording = true;
-        if (mediaProjection == null) {
-            Intent captureIntent = mediaProjectionManager.createScreenCaptureIntent();
-            startActivityForResult(captureIntent, REQUEST_CODE);
-        }
-    }
-
-    private void initRecorder() {
-        mediaRecorder = new MediaRecorder();
-        mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE);
-        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
-        mediaRecorder.setOutputFile(getSavePath()); // Asegúrate de que getSavePath() devuelve una ruta válida
-        mediaRecorder.setVideoSize(displayWidth, displayHeight);
-        mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
-        mediaRecorder.setVideoEncodingBitRate(512 * 1000);
-        mediaRecorder.setVideoFrameRate(30);
-
-        try {
-            mediaRecorder.prepare();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private VirtualDisplay createVirtualDisplay() {
-        Log.i("PixelInfo", "display");
-
-        return mediaProjection.createVirtualDisplay("MainActivity",
-                displayWidth, displayHeight, screenDensity,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                mediaRecorder.getSurface(), null,null);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_CODE && resultCode == RESULT_OK) {
-            mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data);
-            startRecording(); // Configura y prepara MediaRecorder y luego inicia la grabación
-        }
-    }
-
-    private String getSavePath() {
-        String directoryPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/MyAppRecordings";
-        File directory = new File(directoryPath);
-        if (!directory.exists()) {
-            directory.mkdirs();
-        }
-
-        String fileName = "recording_" + System.currentTimeMillis() + ".mp4";
-        return directoryPath + File.separator + fileName;
-    }
-
-    public void stopRecording() {
-        if (mediaProjection != null) {
-            mediaProjection.stop();
-            mediaProjection = null;
-        }
-        if (mediaRecorder != null) {
-            mediaRecorder.stop();
-            mediaRecorder.reset();
-            mediaRecorder.release(); // No olvides liberar el MediaRecorder
-        }
-        //isRecording = false;
-    }
-
 
     // Función para obtener el color en las coordenadas (x, y)
     private int getColorAtPixel(int x, int y) {
@@ -433,7 +289,6 @@ public class MainActivity extends CameraActivity {
 
             Mat edges = new Mat(frame.size(), CvType.CV_8UC1);
             BorderGris(frame.getNativeObjAddr(), edges.getNativeObjAddr());
-            //BorderColor(mRgba.getNativeObjAddr(), mRgba.getNativeObjAddr());
 
             // Dibujar el resultado en el SurfaceView
             if (secondSurfaceHolder.getSurface().isValid()) {

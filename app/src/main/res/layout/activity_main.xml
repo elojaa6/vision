@@ -59,19 +59,6 @@
         opencv:layout_constraintVertical_bias="0.0"/>
 
     <Button
-        android:id="@+id/detener"
-        android:layout_width="50dp"
-        android:layout_height="50dp"
-        android:layout_gravity="center"
-        android:text="⊡"
-        opencv:layout_constraintBottom_toBottomOf="parent"
-        opencv:layout_constraintEnd_toEndOf="parent"
-        opencv:layout_constraintHorizontal_bias="0.93"
-        opencv:layout_constraintStart_toStartOf="parent"
-        opencv:layout_constraintTop_toTopOf="parent"
-        opencv:layout_constraintVertical_bias="0.0" />
-
-    <Button
         android:id="@+id/show_histogram_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

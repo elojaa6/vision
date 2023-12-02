@@ -13,23 +13,6 @@
 using namespace cv;
 
 
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_vision_MainActivity_stringFromJNI(
-        JNIEnv* env,
-        jobject /* this */) {
-    std::string hello = "Hello from C++";
-    return env->NewStringUTF(hello.c_str());
-}
-
-extern "C"
-JNIEXPORT void JNICALL
-Java_com_example_vision_MainActivity_Grayscale(JNIEnv* env, jobject instance, jlong addrInput) {
-    Mat* inputFrame = (Mat*)addrInput;
-
-    cvtColor(*inputFrame, *inputFrame, COLOR_BGR2GRAY);
-
-}
-
 extern "C"
 JNIEXPORT void JNICALL
 Java_com_example_vision_MainActivity_ChangeColor(JNIEnv* env, jobject instance, jlong addrInput, jint targetColor, jint color) {
@@ -58,18 +41,6 @@ Java_com_example_vision_MainActivity_ChangeColor(JNIEnv* env, jobject instance, 
     }
 }
 
-extern "C" {
-JNIEXPORT void JNICALL
-Java_com_example_vision_MainActivity_BorderColor(JNIEnv* env, jobject instance, jlong addrInput, jlong addrOutput) {
-    Mat* inputFrame = (Mat*)addrInput;
-    Mat* outputFrame = (Mat*)addrOutput;
-
-    // Aplicar el filtro Canny para la detección de bordes en la imagen RGBA original
-    Canny(*inputFrame, *outputFrame, 50, 150, 3);
-
-    // Puedes ajustar los parámetros (umbral bajo y alto) según tus necesidades
-}
-}
 
 extern "C"
 JNIEXPORT void JNICALL
